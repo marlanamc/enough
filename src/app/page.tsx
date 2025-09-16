@@ -20,10 +20,7 @@ import {
   CheckCircle2,
   Trash2,
   Award,
-  CheckCircle,
-  Home,
-  Briefcase,
-  User
+  CheckCircle
 } from 'lucide-react'
 
 // Types
@@ -105,12 +102,12 @@ interface UserStats {
 
 // Constants
 const ENERGY_TYPES = {
-  focus: { label: 'Focus', color: '#6b7280', icon: Brain, description: 'Deep work, concentration' },
-  social: { label: 'Social', color: '#6b7280', icon: Users, description: 'Meetings, calls, interactions' },
-  physical: { label: 'Physical', color: '#6b7280', icon: Zap, description: 'Exercise, movement, physical tasks' },
-  creative: { label: 'Creative', color: '#6b7280', icon: Palette, description: 'Art, writing, brainstorming' },
-  emotional: { label: 'Emotional', color: '#6b7280', icon: Heart, description: 'Processing feelings, self-care' },
-  admin: { label: 'Admin', color: '#6b7280', icon: Settings, description: 'Paperwork, organizing, planning' }
+  focus: { label: 'Focus', color: '#6366f1', icon: Brain, description: 'Deep work, concentration' },
+  social: { label: 'Social', color: '#0ea5e9', icon: Users, description: 'Meetings, calls, interactions' },
+  physical: { label: 'Physical', color: '#10b981', icon: Zap, description: 'Exercise, movement, physical tasks' },
+  creative: { label: 'Creative', color: '#f97316', icon: Palette, description: 'Art, writing, brainstorming' },
+  emotional: { label: 'Emotional', color: '#f43f5e', icon: Heart, description: 'Processing feelings, self-care' },
+  admin: { label: 'Admin', color: '#64748b', icon: Settings, description: 'Paperwork, organizing, planning' }
 }
 
 const NATURE_OPTIONS = {
@@ -119,18 +116,9 @@ const NATURE_OPTIONS = {
   demanding: { label: 'Draining', adjustment: 10, description: 'Emotionally or mentally taxing work' }
 }
 
-const CATEGORY_STYLES: Record<string, { icon: typeof Briefcase; color: string }> = {
-  work: { icon: Briefcase, color: '#6366f1' },
-  personal: { icon: User, color: '#f97316' },
-  home: { icon: Home, color: '#10b981' },
-  health: { icon: Heart, color: '#ef4444' },
-  creative: { icon: Palette, color: '#a855f7' },
-  social: { icon: Users, color: '#0ea5e9' }
-}
-
 const DEFAULT_CATEGORIES = ['work', 'personal', 'home', 'health', 'creative', 'social']
 
-const DEFAULT_CATEGORY_COLOR = '#94a3b8'
+const DEFAULT_ENERGY_COLOR = '#94a3b8'
 
 const DEFAULT_TEMPLATES: TaskTemplate[] = [
   // Work templates
@@ -239,7 +227,7 @@ function EnergyVisualization({
           </div>
           
           {/* Handle */}
-          <div className="absolute right-0 top-16 w-8 h-16 border-4 border-slate-300 rounded-r-full bg-transparent" />
+          <div className="absolute -right-10 top-20 h-20 w-12 rounded-full border-4 border-slate-300 border-l-transparent bg-transparent" />
         </div>
         
         {/* Center text */}
@@ -524,7 +512,7 @@ function TaskItem({
     return `${hour - 12} PM`
   }
 
-  const categoryColor = CATEGORY_STYLES[task.category]?.color ?? DEFAULT_CATEGORY_COLOR
+  const energyTypeColor = ENERGY_TYPES[task.energyType]?.color ?? DEFAULT_ENERGY_COLOR
 
   return (
     <div
@@ -545,7 +533,7 @@ function TaskItem({
         </button>
         <span
           className="h-3 w-3 rounded-full flex-shrink-0"
-          style={{ backgroundColor: categoryColor }}
+          style={{ backgroundColor: energyTypeColor }}
           aria-hidden="true"
         />
         <div className="min-w-0">
@@ -573,7 +561,9 @@ function TaskItem({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-slate-700">{task.energy}%</span>
+        <span className="text-sm font-semibold" style={{ color: energyTypeColor }}>
+          {task.energy}%
+        </span>
         <button
           type="button"
           onClick={() => onDelete(task.id)}
@@ -791,21 +781,23 @@ function QuickAddDialog({
               {Object.entries(ENERGY_TYPES).map(([key, type]) => {
                 const Icon = type.icon
                 const isActive = customTask.energyType === key
+                const buttonStyle = isActive
+                  ? { backgroundColor: type.color, borderColor: type.color, color: '#ffffff' }
+                  : { backgroundColor: `${type.color}14`, borderColor: `${type.color}33`, color: type.color }
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setCustomTask(prev => ({ ...prev, energyType: key }))}
-                    className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
-                      isActive
-                        ? 'border-slate-900 bg-slate-900 text-white shadow'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
+                      isActive ? 'shadow-md text-white' : 'hover:brightness-105'
                     }`}
+                    style={buttonStyle}
                     aria-pressed={isActive}
                   >
                     <span className="flex items-center gap-2">
-                      <Icon size={18} />
-                      {type.label}
+                      <Icon size={18} color={isActive ? '#ffffff' : type.color} />
+                      <span className="capitalize">{type.label}</span>
                     </span>
                   </button>
                 )
@@ -1320,38 +1312,39 @@ export default function EnoughApp() {
 
   // Calculate energy totals
   const energyData = useMemo(() => {
-    const categoryTotals = new Map<string, number>()
+    const energyTotals = new Map<string, number>()
 
     const total = tasks.reduce((sum, task) => {
       if (task.completed) return sum
 
-      const current = categoryTotals.get(task.category) ?? 0
-      categoryTotals.set(task.category, current + task.energy)
+      const typeKey = task.energyType || 'focus'
+      const current = energyTotals.get(typeKey) ?? 0
+      energyTotals.set(typeKey, current + task.energy)
 
       return sum + task.energy
     }, 0)
 
     const segments: EnergySegment[] = []
 
-    settings.categories.forEach(category => {
-      const value = categoryTotals.get(category)
+    Object.keys(ENERGY_TYPES).forEach(typeKey => {
+      const value = energyTotals.get(typeKey)
       if (!value) return
 
       segments.push({
-        category,
+        category: typeKey,
         value,
-        color: CATEGORY_STYLES[category]?.color ?? DEFAULT_CATEGORY_COLOR
+        color: ENERGY_TYPES[typeKey]?.color ?? DEFAULT_ENERGY_COLOR
       })
 
-      categoryTotals.delete(category)
+      energyTotals.delete(typeKey)
     })
 
-    categoryTotals.forEach((value, category) => {
+    energyTotals.forEach((value, typeKey) => {
       if (value <= 0) return
       segments.push({
-        category,
+        category: typeKey,
         value,
-        color: CATEGORY_STYLES[category]?.color ?? DEFAULT_CATEGORY_COLOR
+        color: ENERGY_TYPES[typeKey]?.color ?? DEFAULT_ENERGY_COLOR
       })
     })
 
@@ -1360,7 +1353,7 @@ export default function EnoughApp() {
       overflow: Math.max(0, total - settings.dailyCapacity),
       segments 
     }
-  }, [tasks, settings.dailyCapacity, settings.categories])
+  }, [tasks, settings.dailyCapacity])
 
   const quickAddSuggestions = useMemo(() => settings.taskTemplates.slice(0, 3), [settings.taskTemplates])
 
