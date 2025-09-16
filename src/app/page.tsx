@@ -2,15 +2,12 @@
 
 import { useState, useMemo, useEffect, FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { 
   Calendar, 
@@ -61,6 +58,20 @@ interface EnergySegment {
   color: string
 }
 
+type NatureKey = keyof typeof NATURE_OPTIONS
+
+function calculateEnergyFromCalculator(values: { planning: number; doing: number; switching: number; nature: NatureKey }) {
+  const weightedMinutes = values.doing + values.planning * 0.5 + values.switching * 0.75
+  const base = Math.round(weightedMinutes / 2.2)
+  const adjustment = NATURE_OPTIONS[values.nature]?.adjustment ?? 0
+  const total = base + adjustment
+  return Math.max(5, Math.min(100, total))
+}
+
+function calculateDurationFromCalculator(values: { planning: number; doing: number; switching: number }) {
+  return Math.max(5, Math.round(values.planning + values.doing + values.switching))
+}
+
 interface Settings {
   dailyCapacity: number
   theme: string
@@ -100,6 +111,12 @@ const ENERGY_TYPES = {
   creative: { label: 'Creative', color: '#6b7280', icon: Palette, description: 'Art, writing, brainstorming' },
   emotional: { label: 'Emotional', color: '#6b7280', icon: Heart, description: 'Processing feelings, self-care' },
   admin: { label: 'Admin', color: '#6b7280', icon: Settings, description: 'Paperwork, organizing, planning' }
+}
+
+const NATURE_OPTIONS = {
+  restorative: { label: 'Restorative', adjustment: -8, description: 'Gives energy back or feels nourishing' },
+  neutral: { label: 'Neutral', adjustment: 0, description: 'Steady effort with predictable output' },
+  demanding: { label: 'Draining', adjustment: 10, description: 'Emotionally or mentally taxing work' }
 }
 
 const CATEGORY_STYLES: Record<string, { icon: typeof Briefcase; color: string }> = {
@@ -588,47 +605,25 @@ function QuickAddDialog({
   currentCapacity: number
   maxCapacity: number
 }) {
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [customTask, setCustomTask] = useState({
     name: '',
     energy: 20,
     duration: 30,
     energyType: 'focus',
-    category: 'work',
-    priority: 'medium' as 'low' | 'medium' | 'high'
+    category: categories[0] ?? 'work'
   })
-  const [showCustomForm, setShowCustomForm] = useState(false)
-  
-  const filteredTemplates = selectedCategory === 'all' 
-    ? templates 
-    : templates.filter(t => t.category === selectedCategory)
+  const [useCalculator, setUseCalculator] = useState(true)
+  const [calculator, setCalculator] = useState({
+    planning: 0,
+    doing: 60,
+    switching: 0,
+    nature: 'neutral' as NatureKey
+  })
 
   const remainingCapacity = maxCapacity - currentCapacity
-  
-  const handleAddCustomTask = () => {
-    if (!customTask.name.trim()) return
-    
-    const template: TaskTemplate = {
-      id: Date.now().toString(),
-      name: customTask.name,
-      energy: customTask.energy,
-      duration: customTask.duration,
-      energyType: customTask.energyType,
-      category: customTask.category
-    }
-    
-    onAddTask(template)
-    setCustomTask({
-      name: '',
-      energy: 20,
-      duration: 30,
-      energyType: 'focus',
-      category: 'work',
-      priority: 'medium'
-    })
-    setShowCustomForm(false)
-    onClose()
-  }
+  const calculatorEnergy = useMemo(() => calculateEnergyFromCalculator(calculator), [calculator])
+  const calculatorDuration = useMemo(() => calculateDurationFromCalculator(calculator), [calculator])
+  const displayedEnergy = useCalculator ? calculatorEnergy : customTask.energy
 
   const getCapacityWarning = (energy: number) => {
     if (currentCapacity + energy > maxCapacity) {
@@ -638,163 +633,261 @@ function QuickAddDialog({
     return null
   }
 
+  const handleCalculatorField = (field: 'planning' | 'doing' | 'switching', value: number) => {
+    const numericValue = Number.isFinite(value) ? Math.max(0, value) : 0
+    setCalculator(prev => ({ ...prev, [field]: numericValue }))
+  }
+
+  const handleAddCustomTask = () => {
+    if (!customTask.name.trim()) return
+
+    const template: TaskTemplate = {
+      id: Date.now().toString(),
+      name: customTask.name,
+      energy: displayedEnergy,
+      duration: useCalculator ? calculatorDuration : customTask.duration,
+      energyType: customTask.energyType,
+      category: customTask.category
+    }
+
+    onAddTask(template)
+    setCustomTask({
+      name: '',
+      energy: 20,
+      duration: 30,
+      energyType: 'focus',
+      category: categories[0] ?? 'work'
+    })
+    setCalculator({ planning: 0, doing: 60, switching: 0, nature: 'neutral' as NatureKey })
+    onClose()
+  }
+
+  const capacityWarning = getCapacityWarning(displayedEnergy)
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
+          <DialogTitle className="flex items-center justify-between text-2xl font-semibold">
             Add Task
-            <div className="text-sm font-normal text-slate-500">
+            <span className="text-sm font-normal text-slate-500">
               {remainingCapacity}% capacity remaining
-            </div>
+            </span>
           </DialogTitle>
         </DialogHeader>
-        
-        <Tabs value={showCustomForm ? 'custom' : 'templates'} onValueChange={(v) => setShowCustomForm(v === 'custom')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="templates">Quick Templates</TabsTrigger>
-            <TabsTrigger value="custom">Custom Task</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="templates" className="space-y-6">
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={selectedCategory === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategory('all')}
-              >
-                All
-              </Button>
-              {categories.map(category => (
-                <Button
-                  key={category}
-                  variant={selectedCategory === category ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCategory(category)}
-                  className="capitalize"
-                >
-                  {category}
-                </Button>
-              ))}
+
+        <div className="space-y-6">
+          <Input
+            placeholder="What do you need to do?"
+            value={customTask.name}
+            onChange={(event) => setCustomTask(prev => ({ ...prev, name: event.target.value }))}
+            className="h-12 rounded-xl border-slate-200 bg-white/80"
+          />
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">Capacity Calculator</p>
+                <p className="text-xs text-slate-500">Estimate effort with planning and switching overhead.</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <span>Use calculator</span>
+                <Switch
+                  checked={useCalculator}
+                  onCheckedChange={(checked) => setUseCalculator(checked)}
+                />
+              </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {filteredTemplates.map(template => {
-                const warning = getCapacityWarning(template.energy)
-                
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-slate-600">Planning (min)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={calculator.planning}
+                  onChange={(event) => handleCalculatorField('planning', Number(event.target.value))}
+                  className="mt-1 h-11 rounded-xl border-slate-200"
+                  disabled={!useCalculator}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Doing (min)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={calculator.doing}
+                  onChange={(event) => handleCalculatorField('doing', Number(event.target.value))}
+                  className="mt-1 h-11 rounded-xl border-slate-200"
+                  disabled={!useCalculator}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Switching/setup (min)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={calculator.switching}
+                  onChange={(event) => handleCalculatorField('switching', Number(event.target.value))}
+                  className="mt-1 h-11 rounded-xl border-slate-200"
+                  disabled={!useCalculator}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Nature</label>
+                <Select
+                  value={calculator.nature}
+                  onValueChange={(value) => setCalculator(prev => ({ ...prev, nature: value as NatureKey }))}
+                  disabled={!useCalculator}
+                >
+                  <SelectTrigger className="mt-1 h-11 rounded-xl border-slate-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(NATURE_OPTIONS).map(([key, option]) => (
+                      <SelectItem key={key} value={key}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <p className="mt-4 text-xs text-slate-500">
+              Model output includes activation cost plus planning and switching overhead; duration reflects the total minutes entered.
+            </p>
+
+            <div className="mt-3 flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2">
+              <div className="text-sm font-medium text-slate-600">Model output</div>
+              <div className="text-lg font-semibold text-slate-900">{calculatorEnergy}% energy</div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm font-medium text-slate-600">
+              <span>How draining?</span>
+              <span className="text-slate-900">{displayedEnergy}%</span>
+            </div>
+            <Slider
+              value={[displayedEnergy]}
+              onValueChange={(value) => {
+                if (useCalculator) return
+                setCustomTask(prev => ({ ...prev, energy: value[0] }))
+              }}
+              min={5}
+              max={100}
+              step={5}
+              disabled={useCalculator}
+            />
+            {!useCalculator && (
+              <p className="text-xs text-slate-500">Drag to match how much this task will drain you.</p>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-slate-700">What kind?</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {Object.entries(ENERGY_TYPES).map(([key, type]) => {
+                const Icon = type.icon
+                const isActive = customTask.energyType === key
                 return (
-                  <Button
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCustomTask(prev => ({ ...prev, energyType: key }))}
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
+                      isActive
+                        ? 'border-slate-900 bg-slate-900 text-white shadow'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Icon size={18} />
+                      {type.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-600">Category</label>
+              <Select
+                value={customTask.category}
+                onValueChange={(value) => setCustomTask(prev => ({ ...prev, category: value }))}
+              >
+                <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(category => (
+                    <SelectItem key={category} value={category} className="capitalize">
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!useCalculator && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-600">Duration (minutes)</label>
+                <Slider
+                  value={[customTask.duration]}
+                  onValueChange={(value) => setCustomTask(prev => ({ ...prev, duration: value[0] }))}
+                  min={5}
+                  max={240}
+                  step={5}
+                />
+                <p className="text-xs text-slate-500">Set this when the calculator is off.</p>
+              </div>
+            )}
+            {useCalculator && (
+              <div className="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3">
+                <p className="text-xs text-slate-500">Estimated duration</p>
+                <p className="text-sm font-semibold text-slate-800">{calculatorDuration} minutes</p>
+              </div>
+            )}
+          </div>
+
+          {capacityWarning && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {capacityWarning}
+            </div>
+          )}
+
+          <Button
+            onClick={handleAddCustomTask}
+            disabled={!customTask.name.trim()}
+            className="w-full h-12 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+          >
+            Add Task
+          </Button>
+
+          {templates.length > 0 && (
+            <div className="pt-4 border-t border-slate-200">
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-3">Quick templates</p>
+              <div className="flex flex-wrap gap-2">
+                {templates.slice(0, 6).map(template => (
+                  <button
                     key={template.id}
-                    variant="outline"
-                    className="h-auto p-4 justify-start text-left hover:bg-slate-50"
+                    type="button"
                     onClick={() => {
                       onAddTask(template)
                       onClose()
                     }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                   >
-                    <div className="w-full">
-                      <div className="font-medium text-sm">{template.name}</div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {template.energy}% • {template.duration}min • {template.category}
-                      </div>
-                      {warning && (
-                        <div className="text-xs text-red-500 mt-1">{warning}</div>
-                      )}
-                    </div>
-                  </Button>
-                )
-              })}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="custom" className="space-y-6">
-            <div className="space-y-4">
-              <Input
-                placeholder="Task name"
-                value={customTask.name}
-                onChange={(e) => setCustomTask(prev => ({ ...prev, name: e.target.value }))}
-              />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Energy: {customTask.energy}%
-                  </label>
-                  <Slider
-                    value={[customTask.energy]}
-                    onValueChange={(v) => setCustomTask(prev => ({ ...prev, energy: v[0] }))}
-                    min={5}
-                    max={50}
-                    step={5}
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Duration: {customTask.duration} min
-                  </label>
-                  <Slider
-                    value={[customTask.duration]}
-                    onValueChange={(v) => setCustomTask(prev => ({ ...prev, duration: v[0] }))}
-                    min={15}
-                    max={180}
-                    step={15}
-                  />
-                </div>
+                    {template.name} • {template.energy}%
+                  </button>
+                ))}
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  value={customTask.category}
-                  onValueChange={(value) => setCustomTask(prev => ({ ...prev, category: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(cat => (
-                      <SelectItem key={cat} value={cat} className="capitalize">
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                <Select
-                  value={customTask.energyType}
-                  onValueChange={(value) => setCustomTask(prev => ({ ...prev, energyType: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ENERGY_TYPES).map(([key, type]) => (
-                      <SelectItem key={key} value={key}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {getCapacityWarning(customTask.energy) && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-700 text-sm">
-                    {getCapacityWarning(customTask.energy)}
-                  </p>
-                </div>
-              )}
-              
-              <Button 
-                onClick={handleAddCustomTask} 
-                disabled={!customTask.name.trim()}
-                className="w-full"
-              >
-                Add Custom Task
-              </Button>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -818,7 +911,7 @@ function OnboardingDialog({
         <div className="text-center space-y-4">
           <p className="text-slate-600">
             Enough helps you plan your day by energy, not just time. 
-            Let's get you set up in just a few steps.
+            Let&apos;s get you set up in just a few steps.
           </p>
           <div className="text-6xl">☕</div>
         </div>
@@ -855,7 +948,7 @@ function OnboardingDialog({
         <div className="space-y-4">
           <p className="text-slate-600">
             Think of your energy like a cup or circle that fills up as you add tasks. 
-            When it's full, you've planned enough for the day.
+            When it&apos;s full, you&apos;ve planned enough for the day.
           </p>
           <div className="flex justify-center gap-8">
             <div className="text-center">
@@ -871,7 +964,7 @@ function OnboardingDialog({
       )
     },
     {
-      title: "You're All Set! 🎉",
+      title: "You&apos;re All Set! 🎉",
       content: (
         <div className="text-center space-y-4">
           <p className="text-slate-600">
@@ -1373,7 +1466,8 @@ export default function EnoughApp() {
   const unscheduleTask = (taskId: string) => {
     setTasks(prev => prev.map(task => {
       if (task.id === taskId) {
-        const { scheduledTime, ...updatedTask } = task
+        const updatedTask = { ...task }
+        delete updatedTask.scheduledTime
         return updatedTask
       }
       return task
