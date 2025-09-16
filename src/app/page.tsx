@@ -674,7 +674,7 @@ function QuickAddDialog({
             className="h-12 rounded-xl border-slate-200 bg-white/80"
           />
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4 space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-700">Capacity Calculator</p>
@@ -689,69 +689,69 @@ function QuickAddDialog({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-slate-600">Planning (min)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={calculator.planning}
-                  onChange={(event) => handleCalculatorField('planning', Number(event.target.value))}
-                  className="mt-1 h-11 rounded-xl border-slate-200"
-                  disabled={!useCalculator}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Doing (min)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={calculator.doing}
-                  onChange={(event) => handleCalculatorField('doing', Number(event.target.value))}
-                  className="mt-1 h-11 rounded-xl border-slate-200"
-                  disabled={!useCalculator}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Switching/setup (min)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={calculator.switching}
-                  onChange={(event) => handleCalculatorField('switching', Number(event.target.value))}
-                  className="mt-1 h-11 rounded-xl border-slate-200"
-                  disabled={!useCalculator}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Nature</label>
-                <Select
-                  value={calculator.nature}
-                  onValueChange={(value) => setCalculator(prev => ({ ...prev, nature: value as NatureKey }))}
-                  disabled={!useCalculator}
-                >
-                  <SelectTrigger className="mt-1 h-11 rounded-xl border-slate-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(NATURE_OPTIONS).map(([key, option]) => (
-                      <SelectItem key={key} value={key}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            {useCalculator && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Planning (min)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={calculator.planning}
+                      onChange={(event) => handleCalculatorField('planning', Number(event.target.value))}
+                      className="mt-1 h-11 rounded-xl border-slate-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Doing (min)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={calculator.doing}
+                      onChange={(event) => handleCalculatorField('doing', Number(event.target.value))}
+                      className="mt-1 h-11 rounded-xl border-slate-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Switching/setup (min)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={calculator.switching}
+                      onChange={(event) => handleCalculatorField('switching', Number(event.target.value))}
+                      className="mt-1 h-11 rounded-xl border-slate-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Nature</label>
+                    <Select
+                      value={calculator.nature}
+                      onValueChange={(value) => setCalculator(prev => ({ ...prev, nature: value as NatureKey }))}
+                    >
+                      <SelectTrigger className="mt-1 h-11 rounded-xl border-slate-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(NATURE_OPTIONS).map(([key, option]) => (
+                          <SelectItem key={key} value={key}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-            <p className="mt-4 text-xs text-slate-500">
-              Model output includes activation cost plus planning and switching overhead; duration reflects the total minutes entered.
-            </p>
+                <p className="text-xs text-slate-500">
+                  Model output includes activation cost plus planning and switching overhead; duration reflects the total minutes entered.
+                </p>
 
-            <div className="mt-3 flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2">
-              <div className="text-sm font-medium text-slate-600">Model output</div>
-              <div className="text-lg font-semibold text-slate-900">{calculatorEnergy}% energy</div>
-            </div>
+                <div className="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2">
+                  <div className="text-sm font-medium text-slate-600">Model output</div>
+                  <div className="text-lg font-semibold text-slate-900">{calculatorEnergy}% energy</div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
